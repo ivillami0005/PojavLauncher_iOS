@@ -28,8 +28,8 @@ SLIMMED_ONLY ?= 0
 
 # If not in a GitHub repository, default to these
 # so that compiling doesn't fail
-BRANCH ?= "unknown"
-COMMIT ?= "unknown"
+BRANCH := $(if $(BRANCH),$(BRANCH),"unknown")
+COMMIT := $(if $(COMMIT),$(COMMIT),"unknown")
 
 # Team IDs and provisioning profile for the codesign function
 # Default to -1 for check
