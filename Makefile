@@ -10,7 +10,7 @@ WORKINGDIR  := $(SOURCEDIR)/Natives/build
 DETECTPLAT  := $(shell uname -s)
 DETECTARCH  := $(shell uname -m)
 VERSION     := 3.0
-BRANCH      := $(shell git branch --show-current)
+BRANCH      ?= $(shell git branch --show-current)
 COMMIT      := $(shell git log --oneline | sed '2,10000000d' | cut -b 1-7)
 PLATFORM    ?= 2
 
