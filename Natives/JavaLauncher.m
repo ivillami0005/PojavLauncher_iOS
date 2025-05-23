@@ -20,6 +20,14 @@
 
 extern char **environ;
 
+BOOL validateVirtualMemorySpace(int size) {
+    void *map = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    // Check if process successfully maps and unmaps a contiguous range
+    if (map == MAP_FAILED || munmap(map, size) != 0)
+        return NO;
+    return YES;
+}
+
 void init_loadDefaultEnv() {
     /* Define default env */
 
@@ -27,7 +35,7 @@ void init_loadDefaultEnv() {
     setenv("LD_LIBRARY_PATH", "", 1);
 
     // Ignore mipmap for performance(?) seems does not affect iOS
-    //setenv("LIBGL_MIPMAP", "3", 1);
+    setenv("LIBGL_MIPMAP", "3", 1);
 
     // Disable overloaded functions hack for Minecraft 1.17+
     setenv("LIBGL_NOINTOVLHACK", "1", 1);
@@ -167,6 +175,11 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         allocmem = getPrefInt(@"java.allocated_memory");
     }
     NSLog(@"[JavaLauncher] Max RAM allocation is set to %d MB", allocmem);
+    if (!validateVirtualMemorySpace(allocmem)) {
+        UIKit_returnToSplitView();
+        showDialog(localize(@"Error", nil), @"Insufficient contiguous virtual memory space. Lower memory allocation and try again.");
+        return 1;
+    }
 
     int margc = -1;
     const char *margv[1000];
@@ -200,24 +213,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;
-    
-    // Load java
-    NSString *libjlipath8 = [NSString stringWithFormat:@"%@/lib/jli/libjli.dylib", javaHome]; // java 8
-    NSString *libjlipath11 = [NSString stringWithFormat:@"%@/lib/libjli.dylib", javaHome]; // java 11+
-    BOOL isJava8Path = [fm fileExistsAtPath:libjlipath8];
-    
-    // Important: Add Java 9+ permissions before loading the Cosmetica agent
-    if(!isJava8Path) {
-        // Required by Cosmetica to inject DNS
-        margv[++margc] = "--add-opens=java.base/java.net=ALL-UNNAMED";
-        // Additional permissions for Cosmetica to access internal InetAddress classes
-        margv[++margc] = "--add-exports=java.base/sun.net.dns=ALL-UNNAMED";
-        margv[++margc] = "--add-exports=java.base/sun.net=ALL-UNNAMED";
-        margv[++margc] = "--add-opens=java.base/sun.net=ALL-UNNAMED";
-        margv[++margc] = "--add-opens=java.base/sun.net.dns=ALL-UNNAMED";
-    }
-    
-    // Add Cosmetica agent after Java 9+ permissions are set
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
     }
@@ -229,7 +224,11 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     // Disable Forge 1.16.x early progress window
     margv[++margc] = "-Dfml.earlyprogresswindow=false";
 
-    setenv("INTERNAL_JLI_PATH", (isJava8Path ? libjlipath8 : libjlipath11).UTF8String, 1);
+    // Load java
+    NSString *libjlipath8 = [NSString stringWithFormat:@"%@/lib/jli/libjli.dylib", javaHome]; // java 8
+    NSString *libjlipath11 = [NSString stringWithFormat:@"%@/lib/libjli.dylib", javaHome]; // java 11+
+    BOOL isJava8 = [fm fileExistsAtPath:libjlipath8];
+    setenv("INTERNAL_JLI_PATH", (isJava8 ? libjlipath8 : libjlipath11).UTF8String, 1);
     void* libjli = dlopen(getenv("INTERNAL_JLI_PATH"), RTLD_GLOBAL);
 
     if (!libjli) {
@@ -246,11 +245,14 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Dcacio.font.fontscaler=sun.font.FreetypeFontScaler";
     margv[++margc] = [NSString stringWithFormat:@"-Dcacio.managed.screensize=%dx%d", width, height].UTF8String;
     margv[++margc] = "-Dswing.defaultlaf=javax.swing.plaf.metal.MetalLookAndFeel";
-    if (isJava8Path) {
+    if (isJava8) {
         // Setup Caciocavallo
         margv[++margc] = "-Dawt.toolkit=net.java.openjdk.cacio.ctc.CTCToolkit";
         margv[++margc] = "-Djava.awt.graphicsenv=net.java.openjdk.cacio.ctc.CTCGraphicsEnvironment";
     } else {
+        // Required by Cosmetica to inject DNS
+        margv[++margc] = "--add-opens=java.base/java.net=ALL-UNNAMED";
+
         // Setup Caciocavallo
         margv[++margc] = "-Dawt.toolkit=com.github.caciocavallosilano.cacio.ctc.CTCToolkit";
         margv[++margc] = "-Djava.awt.graphicsenv=com.github.caciocavallosilano.cacio.ctc.CTCGraphicsEnvironment";
@@ -277,8 +279,8 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
 
     // Add Caciocavallo bootclasspath
-    NSString *cacio_classpath = [NSString stringWithFormat:@"-Xbootclasspath/%s", isJava8Path ? "p" : "a"];
-    NSString *cacio_libs_path = [NSString stringWithFormat:@"%@/libs_caciocavallo%s", NSBundle.mainBundle.bundlePath, isJava8Path ? "" : "17"];
+    NSString *cacio_classpath = [NSString stringWithFormat:@"-Xbootclasspath/%s", isJava8 ? "p" : "a"];
+    NSString *cacio_libs_path = [NSString stringWithFormat:@"%@/libs_caciocavallo%s", NSBundle.mainBundle.bundlePath, isJava8 ? "" : "17"];
     NSArray *files = [fm contentsOfDirectoryAtPath:cacio_libs_path error:nil];
     for(NSString *file in files) {
         if ([file hasSuffix:@".jar"]) {
