@@ -95,7 +95,9 @@
     [self addActivityIndicatorTo:cell];
 
     id callback = ^(id status, BOOL success) {
-        [self callbackMicrosoftAuth:status success:success forCell:cell];
+        dispatch_async(dispatch_get_main_queue(), ^(){
+            [self callbackMicrosoftAuth:status success:success forCell:cell];
+        });
     };
     [[BaseAuthenticator loadSavedName:self.accountList[indexPath.row][@"username"]] refreshTokenWithCallback:callback];
 }
