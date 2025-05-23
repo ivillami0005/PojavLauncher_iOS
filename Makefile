@@ -10,7 +10,7 @@ WORKINGDIR  := $(SOURCEDIR)/Natives/build
 DETECTPLAT  := $(shell uname -s)
 DETECTARCH  := $(shell uname -m)
 VERSION     := 3.0
-BRANCH      ?= $(shell git branch --show-current)
+BRANCH      := $(shell git branch --show-current)
 COMMIT      := $(shell git log --oneline | sed '2,10000000d' | cut -b 1-7)
 PLATFORM    ?= 2
 
@@ -204,6 +204,7 @@ $(error You need to install lld)
 endif
 endif
 
+ifneq ($(filter sysctl,$(shell sysctl -n hw.logicalcpu)),)
 ifneq ($(call METHOD_DEPCHECK,nproc --version),1)
 ifneq ($(call METHOD_DEPCHECK,gnproc --version),1)
 $(warning Unable to determine number of threads, defaulting to 2.)
@@ -213,6 +214,9 @@ JOBS   ?= $(shell gnproc)
 endif
 else
 JOBS   ?= $(shell nproc)
+endif
+else
+JOBS   ?= $(shell sysctl -n hw.logicalcpu)
 endif
 
 ifndef SDKPATH
