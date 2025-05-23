@@ -18,20 +18,19 @@ void swizzleUIImageMethod(SEL originalAction, SEL swizzledAction) {
     Class class = [UIImage class];
     Method originalMethod = class_getInstanceMethod(class, originalAction);
     Method swizzledMethod = class_getInstanceMethod(class, swizzledAction);
-    
     if (originalMethod && swizzledMethod) {
         method_exchangeImplementations(originalMethod, swizzledMethod);
     } else {
-        NSLog(@"[UIKit+hook] Warning: Could not swizzle UIImage methods (%@ and %@)", 
-              NSStringFromSelector(originalAction), 
-              NSStringFromSelector(swizzledAction));
+        NSLog(@"[UIKit+hook] Warning: Could not swizzle UIImage methods (%@ and %@)",
+            NSStringFromSelector(originalAction),
+        NSStringFromSelector(swizzledAction));
     }
 }
 
 void init_hookUIKitConstructor(void) {
     swizzle(UIDevice.class, @selector(userInterfaceIdiom), @selector(hook_userInterfaceIdiom));
     swizzle(UIImageView.class, @selector(setImage:), @selector(hook_setImage:));
-    
+
     // Add this line to swizzle the _imageWithSize: method
     swizzleUIImageMethod(NSSelectorFromString(@"_imageWithSize:"), @selector(hook_imageWithSize:));
 
