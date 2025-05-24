@@ -16,7 +16,7 @@
             @"check_sha": @YES,
             @"cosmetica": @YES,
             @"debug_logging": @(!CONFIG_RELEASE),
-            @"game_mode": @NO,
+            @"game_mode": @YES,
         }.mutableCopy,
         @"video": @{ // Video & Audio
             @"renderer": @"auto",
